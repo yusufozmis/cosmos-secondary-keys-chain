@@ -47,6 +47,7 @@ import (
 
 	"example/docs"
 	examplemodulekeeper "example/x/example/keeper"
+	secondarykeysmodulekeeper "example/x/secondarykeys/keeper"
 )
 
 const (
@@ -99,8 +100,9 @@ type App struct {
 	TransferKeeper      ibctransferkeeper.Keeper
 
 	// simulation manager
-	sm            *module.SimulationManager
-	ExampleKeeper examplemodulekeeper.Keeper
+	sm                  *module.SimulationManager
+	ExampleKeeper       examplemodulekeeper.Keeper
+	SecondarykeysKeeper secondarykeysmodulekeeper.Keeper
 }
 
 func init() {
@@ -181,6 +183,7 @@ func New(
 		&app.CircuitBreakerKeeper,
 		&app.ParamsKeeper,
 		&app.ExampleKeeper,
+		&app.SecondarykeysKeeper,
 	); err != nil {
 		panic(err)
 	}

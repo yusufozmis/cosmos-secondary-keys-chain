@@ -1,0 +1,13 @@
+syntax = "proto3";
+package example.secondarykeys.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "example/x/secondarykeys/types";
+
+// Params defines the parameters for the module.
+message Params {
+  option (amino.name) = "example/x/secondarykeys/Params";
+  option (gogoproto.equal) = true;
+}

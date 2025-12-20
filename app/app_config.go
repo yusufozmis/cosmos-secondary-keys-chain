@@ -3,6 +3,8 @@ package app
 import (
 	_ "example/x/example/module"
 	examplemoduletypes "example/x/example/types"
+	_ "example/x/secondarykeys/module"
+	secondarykeysmoduletypes "example/x/secondarykeys/types"
 	"time"
 
 	runtimev1alpha1 "cosmossdk.io/api/cosmos/app/runtime/v1alpha1"
@@ -126,6 +128,7 @@ var (
 						ibcexported.ModuleName,
 						// chain modules
 						examplemoduletypes.ModuleName,
+						secondarykeysmoduletypes.ModuleName,
 						// this line is used by starport scaffolding # stargate/app/beginBlockers
 					},
 					EndBlockers: []string{
@@ -135,6 +138,7 @@ var (
 						group.ModuleName,
 						// chain modules
 						examplemoduletypes.ModuleName,
+						secondarykeysmoduletypes.ModuleName,
 						// this line is used by starport scaffolding # stargate/app/endBlockers
 					},
 					// The following is mostly only needed when ModuleName != StoreKey name.
@@ -172,6 +176,7 @@ var (
 						icatypes.ModuleName,
 						// chain modules
 						examplemoduletypes.ModuleName,
+						secondarykeysmoduletypes.ModuleName,
 						// this line is used by starport scaffolding # stargate/app/initGenesis
 					},
 				}),
@@ -271,6 +276,10 @@ var (
 			{
 				Name:   examplemoduletypes.ModuleName,
 				Config: appconfig.WrapAny(&examplemoduletypes.Module{}),
+			},
+			{
+				Name:   secondarykeysmoduletypes.ModuleName,
+				Config: appconfig.WrapAny(&secondarykeysmoduletypes.Module{}),
 			},
 			// this line is used by starport scaffolding # stargate/app/moduleConfig
 		},
