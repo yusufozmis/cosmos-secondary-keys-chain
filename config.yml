@@ -26,7 +26,7 @@ validators:
 - name: validator2
   bonded: 100000000stake
 
-  genesis:
+genesis:
   consensus:
     params:
       abci:
