@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"example/x/example/keeper"
+	secondarykeys "example/x/secondarykeys/module"
+
+	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 
 	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 type ProposalHandler struct {
@@ -121,6 +125,16 @@ func (h *ProposalHandler) ProcessProposal() sdk.ProcessProposalHandler {
 				Status: abci.ResponseProcessProposal_REJECT,
 			}, nil
 		}
+		for _, signature := range injectedTx.Signatures {
+			publicKey, err := EthereumK1.RecoverPubkey(ctx.HeaderHash(), signature)
+			if err != nil {
+				panic("err at recover pubkey")
+			}
+			pubKey := CosmosK1.PubKey{
+				Key: publicKey,
+			}
+			secondarykeys.SecondaryKeyMap[string(req.ProposerAddress)] = &pubKey
+		}
 
 		// Verify that we have signatures in the injected tx
 		if len(injectedTx.Signatures) == 0 {
@@ -129,7 +143,6 @@ func (h *ProposalHandler) ProcessProposal() sdk.ProcessProposalHandler {
 				Status: abci.ResponseProcessProposal_REJECT,
 			}, nil
 		}
-
 		ctx.Logger().Info("Signature transaction validated",
 			"height", req.Height,
 			"num_signatures", len(injectedTx.Signatures),

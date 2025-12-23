@@ -2,7 +2,7 @@ package secondarykeys
 
 import (
 	"context"
-	"encoding/hex"
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 
@@ -13,10 +13,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 )
@@ -39,9 +39,9 @@ type AppModule struct {
 	bankKeeper types.BankKeeper
 }
 
-const SecondaryPrivateKey string = "fcbb96b0cb1e2b1608bba5857312389558b0c7724942270805d881f61f3f47e3"
+var SecondaryPrivateKey ecdsa.PrivateKey
 
-var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator pubKey --> validator secondary pubKey
+var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator address --> validator secondary pubKey
 
 func NewAppModule(
 	cdc codec.Codec,
@@ -107,14 +107,11 @@ func (am AppModule) ValidateGenesis(_ codec.JSONCodec, _ client.TxEncodingConfig
 // InitGenesis performs the module's genesis initialization. It returns no validator updates.
 func (am AppModule) InitGenesis(ctx sdk.Context, _ codec.JSONCodec, gs json.RawMessage) {
 
-	privKey, err := hex.DecodeString(SecondaryPrivateKey)
+	prv, err := EthereumK1.GenerateKey()
 	if err != nil {
-		panic(err)
+		panic("err at generating key")
 	}
-	priv := &secp256k1.PrivKey{
-		Key: privKey,
-	}
-	SecondaryKeyMap[string(ctx.BlockHeader().ProposerAddress)] = priv.PubKey()
+	SecondaryPrivateKey = *prv
 
 	var genState types.GenesisState
 	// Initialize global index to index in genesis state

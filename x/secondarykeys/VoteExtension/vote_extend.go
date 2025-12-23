@@ -6,8 +6,8 @@ import (
 	secondarykeys "example/x/secondarykeys/module"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 // VoteExtensionHandler handles vote extension creation and verification
@@ -31,11 +31,8 @@ func (h *VoteExtensionHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 		ctx.Logger().Info("EXTEND VOTE HANDLER CALLED",
 			"height", req.GetHeight(),
 		)
-		secondaryPrivateKey := &secp256k1.PrivKey{
-			Key: []byte(secondarykeys.SecondaryPrivateKey),
-		}
 
-		signature, err := secondaryPrivateKey.Sign(ctx.HeaderHash())
+		signature, err := EthereumK1.Sign(ctx.HeaderHash(), secondarykeys.SecondaryPrivateKey.D.Bytes())
 		if err != nil {
 			ctx.Logger().Error("Failed to sign", "error", err)
 			return nil, err
@@ -72,7 +69,7 @@ func (h *VoteExtensionHandler) VerifyVoteExtensionHandler() sdk.VerifyVoteExtens
 			}, nil
 		}
 		publicKey := secondarykeys.SecondaryKeyMap[string(req.ValidatorAddress)]
-		if !publicKey.VerifySignature(ctx.HeaderHash(), voteExtension.Signature) {
+		if !EthereumK1.VerifySignature(publicKey.Bytes(), ctx.HeaderHash(), voteExtension.Signature) {
 			ctx.Logger().Info("Signature NOT verified, calling from verifyvoteextension",
 				"height", req.Height,
 			)
