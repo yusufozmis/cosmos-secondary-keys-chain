@@ -10,7 +10,6 @@ import (
 	storetypes "cosmossdk.io/store/types"
 	circuitkeeper "cosmossdk.io/x/circuit/keeper"
 	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
-
 	abci "github.com/cometbft/cometbft/abci/types"
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -47,6 +46,7 @@ import (
 
 	"example/docs"
 	examplemodulekeeper "example/x/example/keeper"
+	voteextension "example/x/secondarykeys/VoteExtension"
 	secondarykeysmodulekeeper "example/x/secondarykeys/keeper"
 )
 
@@ -103,6 +103,9 @@ type App struct {
 	sm                  *module.SimulationManager
 	ExampleKeeper       examplemodulekeeper.Keeper
 	SecondarykeysKeeper secondarykeysmodulekeeper.Keeper
+
+	voteExtHandler  *voteextension.VoteExtensionHandler
+	proposalHandler *voteextension.ProposalHandler
 }
 
 func init() {
@@ -209,6 +212,20 @@ func New(
 	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, overrideModules)
 
 	app.sm.RegisterStoreDecoders()
+
+	app.voteExtHandler = voteextension.NewVoteExtensionHandler(&app.ExampleKeeper)
+
+	app.proposalHandler = &voteextension.ProposalHandler{
+		Logger: logger,
+		Keeper: app.ExampleKeeper,
+	}
+	// Vote Extension handlers
+	app.SetExtendVoteHandler(app.voteExtHandler.ExtendVoteHandler())
+	app.SetVerifyVoteExtensionHandler(app.voteExtHandler.VerifyVoteExtensionHandler())
+
+	// Proposal handlers
+	app.SetPrepareProposal(app.proposalHandler.PrepareProposal())
+	app.SetProcessProposal(app.proposalHandler.ProcessProposal())
 
 	// A custom InitChainer sets if extra pre-init-genesis logic is required.
 	// This is necessary for manually registered modules that do not support app wiring.
