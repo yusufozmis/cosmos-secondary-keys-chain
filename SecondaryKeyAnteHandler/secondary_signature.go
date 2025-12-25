@@ -1,0 +1,72 @@
+package secondaryKeyAnteHandler
+
+import (
+	secondarykeys "example/x/secondarykeys/module"
+	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/ethereum/go-ethereum/crypto"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
+)
+
+// SecondarySignatureVerificationDecorator verifies the secondary signature in the memo
+type SecondarySignatureVerificationDecorator struct{}
+
+// NewSecondarySignatureVerificationDecorator creates a new decorator instance
+func NewSecondarySignatureVerificationDecorator() SecondarySignatureVerificationDecorator {
+	return SecondarySignatureVerificationDecorator{}
+}
+
+// AnteHandle implements the ante handler interface
+func (svd SecondarySignatureVerificationDecorator) AnteHandle(
+	ctx sdk.Context,
+	tx sdk.Tx,
+	simulate bool,
+	next sdk.AnteHandler,
+) (sdk.Context, error) {
+	// Skip verification in simulation mode
+	if simulate {
+		return next(ctx, tx, simulate)
+	}
+	// Skip verification during genesis (chain height 0)
+	if ctx.BlockHeight() == 0 {
+		return next(ctx, tx, simulate)
+	}
+	// Get the memo from the tx
+	memoTx, ok := tx.(sdk.TxWithMemo)
+	if !ok {
+		return ctx, sdkerrors.ErrTxDecode
+	}
+	memo := memoTx.GetMemo()
+
+	// If memo is empty, skip
+	if memo == "" {
+		ctx.Logger().Info("AnteHandle called,empty memo")
+		return next(ctx, tx, simulate)
+	}
+
+	// Decode the secondarySignature and publicKey from memo
+	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
+	if err != nil {
+		ctx.Logger().Info("AnteHandle called,decode err", memo)
+		return ctx, sdkerrors.ErrInvalidRequest
+	}
+
+	// Validate the signature structure
+	if err := secondSig.Validate(); err != nil {
+		ctx.Logger().Info("AnteHandle called, empty secondsig")
+		return ctx, sdkerrors.ErrInvalidRequest
+	}
+
+	hsh := crypto.Keccak256([]byte(secondarykeys.AnteHandlerSignatureMessage))
+
+	// Verify the signature
+	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
+		ctx.Logger().Info("AnteHandle called,invalid signature")
+		return ctx, fmt.Errorf("signature verification failed")
+	}
+
+	ctx.Logger().Info("AnteHandle called,tx valid")
+	return next(ctx, tx, simulate)
+}

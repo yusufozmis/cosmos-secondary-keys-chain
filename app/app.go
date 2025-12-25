@@ -24,6 +24,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth"
+	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	authsims "github.com/cosmos/cosmos-sdk/x/auth/simulation"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -44,6 +45,7 @@ import (
 	ibctransferkeeper "github.com/cosmos/ibc-go/v10/modules/apps/transfer/keeper"
 	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
 
+	secondaryKeyAnteHandler "example/SecondaryKeyAnteHandler"
 	"example/docs"
 	examplemodulekeeper "example/x/example/keeper"
 	voteextension "example/x/secondarykeys/VoteExtension"
@@ -226,6 +228,21 @@ func New(
 	// Proposal handlers
 	app.SetPrepareProposal(app.proposalHandler.PrepareProposal())
 	app.SetProcessProposal(app.proposalHandler.ProcessProposal())
+
+	// Create the ante handler
+	anteHandler, err := secondaryKeyAnteHandler.NewAnteHandler(
+		ante.HandlerOptions{
+			AccountKeeper:   app.AuthKeeper,
+			BankKeeper:      app.BankKeeper,
+			SignModeHandler: app.txConfig.SignModeHandler(),
+			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	app.SetAnteHandler(anteHandler)
 
 	// A custom InitChainer sets if extra pre-init-genesis logic is required.
 	// This is necessary for manually registered modules that do not support app wiring.
