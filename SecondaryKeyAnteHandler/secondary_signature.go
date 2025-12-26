@@ -3,6 +3,7 @@ package secondaryKeyAnteHandler
 import (
 	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -46,6 +47,13 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		return next(ctx, tx, simulate)
 	}
 
+	// Check if the memo has the prefix.
+	if !strings.HasPrefix(memo, secondarykeys.AnteHandlerPrefix) {
+		ctx.Logger().Info("AnteHandle called,no prefix")
+		return next(ctx, tx, simulate)
+	}
+
+	memo = strings.TrimPrefix(memo, secondarykeys.AnteHandlerPrefix)
 	// Decode the secondarySignature and publicKey from memo
 	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
 	if err != nil {

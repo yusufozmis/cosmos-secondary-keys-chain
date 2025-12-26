@@ -45,6 +45,8 @@ var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator address --
 
 var AnteHandlerSignatureMessage string = "test"
 
+var AnteHandlerPrefix string = "SECONDARY"
+
 func NewAppModule(
 	cdc codec.Codec,
 	keeper keeper.Keeper,
