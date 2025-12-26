@@ -67,7 +67,7 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		return ctx, sdkerrors.ErrInvalidRequest
 	}
 
-	hsh := crypto.Keccak256([]byte(secondarykeys.AnteHandlerSignatureMessage))
+	hsh := crypto.Keccak256([]byte(secondSig.PublicKey))
 
 	// Verify the signature
 	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {

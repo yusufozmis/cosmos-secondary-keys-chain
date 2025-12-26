@@ -43,8 +43,6 @@ var SecondaryPrivateKey ecdsa.PrivateKey
 
 var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator address --> validator secondary pubKey
 
-var AnteHandlerSignatureMessage string = "test"
-
 var AnteHandlerPrefix string = "SECONDARY"
 
 func NewAppModule(
