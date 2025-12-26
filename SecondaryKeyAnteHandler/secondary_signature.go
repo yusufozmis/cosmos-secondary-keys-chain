@@ -46,14 +46,14 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		ctx.Logger().Info("AnteHandle called,empty memo")
 		return next(ctx, tx, simulate)
 	}
+	var foundPrefix bool
+	memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
 
 	// Check if the memo has the prefix.
-	if !strings.HasPrefix(memo, secondarykeys.AnteHandlerPrefix) {
+	if !foundPrefix {
 		ctx.Logger().Info("AnteHandle called,no prefix")
 		return next(ctx, tx, simulate)
 	}
-
-	memo = strings.TrimPrefix(memo, secondarykeys.AnteHandlerPrefix)
 	// Decode the secondarySignature and publicKey from memo
 	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
 	if err != nil {
