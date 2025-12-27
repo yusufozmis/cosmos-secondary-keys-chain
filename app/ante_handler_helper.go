@@ -3,6 +3,10 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
 type SecondarySignature struct {
@@ -53,4 +57,22 @@ func DecodeSecondSigFromMemo(memo []byte) (*SecondarySignature, error) {
 		PublicKey: memoData.PublicKey,
 		Signature: sig,
 	}, nil
+}
+func GetAddr(tx sdk.Tx) ([]byte, error) {
+
+	sigTx, ok := tx.(authsigning.SigVerifiableTx)
+	if !ok {
+		return nil, sdkerrors.ErrTxDecode
+	}
+
+	signers, err := sigTx.GetSigners()
+	if err != nil {
+		return nil, sdkerrors.ErrPanic
+	}
+	if len(signers) == 0 {
+		return nil, sdkerrors.ErrNoSignatures
+	}
+
+	return signers[0], nil
+
 }

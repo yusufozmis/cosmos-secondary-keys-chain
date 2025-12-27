@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/binary"
 	"errors"
 
 	secondarykeys "example/x/secondarykeys/module"
@@ -19,12 +20,14 @@ type HandlerOptions struct {
 	ante.HandlerOptions
 }
 
-// SecondarySignatureVerificationDecorator verifies the secondary signature in the memo
-type SecondarySignatureVerificationDecorator struct{}
+type SecondarySignatureVerificationDecorator struct {
+	accountKeeper ante.AccountKeeper
+}
 
-// NewSecondarySignatureVerificationDecorator creates a new decorator instance
-func NewSecondarySignatureVerificationDecorator() SecondarySignatureVerificationDecorator {
-	return SecondarySignatureVerificationDecorator{}
+func NewSecondarySignatureVerificationDecorator(accountKeeper ante.AccountKeeper) SecondarySignatureVerificationDecorator {
+	return SecondarySignatureVerificationDecorator{
+		accountKeeper: accountKeeper,
+	}
 }
 
 func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
@@ -52,7 +55,7 @@ func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 
-		NewSecondarySignatureVerificationDecorator(),
+		NewSecondarySignatureVerificationDecorator(options.AccountKeeper),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 
@@ -106,8 +109,18 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		ctx.Logger().Info("AnteHandle called, empty secondsig")
 		return ctx, sdkerrors.ErrInvalidRequest
 	}
+	addr, err := GetAddr(tx)
+	if err != nil {
+		return ctx, err
+	}
+	acc := svd.accountKeeper.GetAccount(ctx, addr)
+	if acc == nil {
+		return ctx, sdkerrors.ErrUnknownAddress
+	}
+	seq := make([]byte, 8)
+	binary.BigEndian.PutUint64(seq, acc.GetSequence())
 
-	hsh := crypto.Keccak256([]byte(secondSig.PublicKey))
+	hsh := crypto.Keccak256([]byte(seq))
 
 	// Verify the signature
 	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
