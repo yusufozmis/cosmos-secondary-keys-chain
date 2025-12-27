@@ -16,15 +16,14 @@ import (
 	"github.com/cometbft/cometbft/crypto/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-	"github.com/cosmos/gogoproto/proto"
-	"github.com/ethereum/go-ethereum/crypto"
-	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
-
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/cosmos/gogoproto/proto"
+	"github.com/ethereum/go-ethereum/crypto"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
 )
 
 const chainID string = "example"
@@ -52,11 +51,66 @@ type VestingAccount struct {
 	BaseAccount BaseAccount `json:"base_account"`
 }
 
-func TestSendTxViaHTTP(t *testing.T) {
+var KeyMap = make(map[string]secp256k1.PrivKey)
+
+const MapKeyWord string = "test"
+
+func TestSendTx(t *testing.T) {
 	// Generate new PrivateKey
 	priv := secp256k1.GenPrivKey()
 	pub := priv.PubKey()
+	KeyMap[MapKeyWord] = priv
+	// Derive the address for the new Private Key
+	fromAddr := sdk.AccAddress(pub.Address())
 
+	// Fund the new account
+	err := fundFromFaucet(fromAddr.String())
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	memo, err := createMemo()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	//Create the transaction with the given info
+	signDoc, err := createTX(fromAddr, memo, &CosmosK1.PubKey{
+		Key: pub.Bytes(),
+	})
+
+	signDocBytes, err := proto.Marshal(signDoc)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Sign the transaction
+	sig, err := priv.Sign(signDocBytes)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// Raw Tx Data
+	txRaw := &txtypes.TxRaw{
+		BodyBytes:     signDoc.BodyBytes,
+		AuthInfoBytes: signDoc.AuthInfoBytes,
+		Signatures:    [][]byte{sig},
+	}
+	txBytes, err := proto.Marshal(txRaw)
+	if err != nil {
+		t.Log(err.Error())
+	}
+	// Broadcast the transaction
+	err = broadcastTx(hex.EncodeToString(txBytes))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+}
+
+// Send Tx with same priv key to check antehandler mapping
+func TestAnteHandlerMapping(t *testing.T) {
+	// Generate new PrivateKey
+	priv := KeyMap[MapKeyWord]
+	pub := priv.PubKey()
 	// Derive the address for the new Private Key
 	fromAddr := sdk.AccAddress(pub.Address())
 
