@@ -4,9 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
-	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -77,33 +75,13 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	if ctx.BlockHeight() == 0 {
 		return next(ctx, tx, simulate)
 	}
-	// Get the memo from the tx
-	memoTx, ok := tx.(sdk.TxWithMemo)
-	if !ok {
-		return ctx, sdkerrors.ErrTxDecode
-	}
-	memo := memoTx.GetMemo()
-
-	// If memo is empty, skip
-	if memo == "" {
-		ctx.Logger().Info("AnteHandle called,empty memo")
-		return next(ctx, tx, simulate)
-	}
-	var foundPrefix bool
-	memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
-
-	// Check if the memo has the prefix.
-	if !foundPrefix {
-		ctx.Logger().Info("AnteHandle called,no prefix")
-		return next(ctx, tx, simulate)
-	}
-	// Decode the secondarySignature and publicKey from memo
-	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
+	secondSig, err := ParseMemo(tx)
 	if err != nil {
-		ctx.Logger().Info("AnteHandle called,decode err", memo)
-		return ctx, sdkerrors.ErrInvalidRequest
+		if err.Error() == ErrNoPrefix {
+			next(ctx, tx, simulate)
+		}
+		return ctx, err
 	}
-
 	// Validate the signature structure
 	if err := secondSig.Validate(); err != nil {
 		ctx.Logger().Info("AnteHandle called, empty secondsig")
