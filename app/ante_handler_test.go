@@ -66,12 +66,12 @@ func TestSendTxViaHTTP(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	memo, err := CreateMemo()
+	memo, err := createMemo()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	//Create the transaction with the given info
-	signDoc, err := CreateTX(fromAddr, memo, &CosmosK1.PubKey{
+	signDoc, err := createTX(fromAddr, memo, &CosmosK1.PubKey{
 		Key: pub.Bytes(),
 	})
 
@@ -97,7 +97,7 @@ func TestSendTxViaHTTP(t *testing.T) {
 		t.Log(err.Error())
 	}
 	// Broadcast the transaction
-	err = BroadcastTx(hex.EncodeToString(txBytes))
+	err = broadcastTx(hex.EncodeToString(txBytes))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -185,7 +185,7 @@ func extractBaseAccount(raw json.RawMessage) (*BaseAccount, error) {
 	return nil, fmt.Errorf("failed to extract base account")
 }
 
-func CreateTX(fromAddr sdk.AccAddress, memo string, sdkPub *CosmosK1.PubKey) (*txtypes.SignDoc, error) {
+func createTX(fromAddr sdk.AccAddress, memo string, sdkPub *CosmosK1.PubKey) (*txtypes.SignDoc, error) {
 
 	toAddr, err := sdk.AccAddressFromBech32(toAddrStr)
 	if err != nil {
@@ -259,7 +259,7 @@ func CreateTX(fromAddr sdk.AccAddress, memo string, sdkPub *CosmosK1.PubKey) (*t
 	}, nil
 }
 
-func BroadcastTx(txHex string) error {
+func broadcastTx(txHex string) error {
 	url := fmt.Sprintf("%s/broadcast_tx_commit?tx=0x%s", rpcURL, txHex)
 
 	resp, err := http.Get(url)
@@ -276,7 +276,7 @@ func BroadcastTx(txHex string) error {
 	return nil
 }
 
-func CreateMemo() (string, error) {
+func createMemo() (string, error) {
 	// Generate a random Ethereum private key
 	secondaryPrivKey, err := EthereumK1.GenerateKey()
 	if err != nil {
