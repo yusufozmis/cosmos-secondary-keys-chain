@@ -45,7 +45,6 @@ import (
 	ibctransferkeeper "github.com/cosmos/ibc-go/v10/modules/apps/transfer/keeper"
 	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
 
-	secondaryKeyAnteHandler "example/SecondaryKeyAnteHandler"
 	"example/docs"
 	examplemodulekeeper "example/x/example/keeper"
 	voteextension "example/x/secondarykeys/VoteExtension"
@@ -230,7 +229,7 @@ func New(
 	app.SetProcessProposal(app.proposalHandler.ProcessProposal())
 
 	// Create the ante handler
-	anteHandler, err := secondaryKeyAnteHandler.NewAnteHandler(
+	anteHandler, err := NewAnteHandler(
 		ante.HandlerOptions{
 			AccountKeeper:   app.AuthKeeper,
 			BankKeeper:      app.BankKeeper,
