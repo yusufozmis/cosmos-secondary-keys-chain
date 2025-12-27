@@ -1,15 +1,17 @@
 package app
 
 import (
-	"encoding/binary"
+	"bytes"
 	"errors"
 
+	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
+	"strings"
 
+	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth/ante"
-
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	"github.com/ethereum/go-ethereum/crypto"
 	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
 )
@@ -18,14 +20,12 @@ type HandlerOptions struct {
 	ante.HandlerOptions
 }
 
-type SecondarySignatureVerificationDecorator struct {
-	accountKeeper ante.AccountKeeper
-}
+// SecondarySignatureVerificationDecorator verifies the secondary signature in the memo
+type SecondarySignatureVerificationDecorator struct{}
 
-func NewSecondarySignatureVerificationDecorator(accountKeeper ante.AccountKeeper) SecondarySignatureVerificationDecorator {
-	return SecondarySignatureVerificationDecorator{
-		accountKeeper: accountKeeper,
-	}
+// NewSecondarySignatureVerificationDecorator creates a new decorator instance
+func NewSecondarySignatureVerificationDecorator() SecondarySignatureVerificationDecorator {
+	return SecondarySignatureVerificationDecorator{}
 }
 
 func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
@@ -53,7 +53,7 @@ func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 
-		NewSecondarySignatureVerificationDecorator(options.AccountKeeper),
+		NewSecondarySignatureVerificationDecorator(),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 
@@ -75,30 +75,52 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	if ctx.BlockHeight() == 0 {
 		return next(ctx, tx, simulate)
 	}
-	secondSig, err := ParseMemo(tx)
+	// Get the memo from the tx
+	memoTx, ok := tx.(sdk.TxWithMemo)
+	if !ok {
+		return ctx, sdkerrors.ErrTxDecode
+	}
+	memo := memoTx.GetMemo()
+
+	// If memo is empty, skip
+	if memo == "" {
+		ctx.Logger().Info("AnteHandle called,empty memo")
+		return next(ctx, tx, simulate)
+	}
+	var foundPrefix bool
+	memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
+
+	// Check if the memo has the prefix.
+	if !foundPrefix {
+		ctx.Logger().Info("AnteHandle called,no prefix")
+		return next(ctx, tx, simulate)
+	}
+	// Decode the secondarySignature and publicKey from memo
+	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
 	if err != nil {
-		if err.Error() == ErrNoPrefix {
-			next(ctx, tx, simulate)
-		}
-		return ctx, err
+		ctx.Logger().Info("AnteHandle called,decode err", memo)
+		return ctx, sdkerrors.ErrInvalidRequest
+	}
+	addr, err := GetAddr(tx)
+	if err != nil {
+		panic("get addr err")
+	}
+	mappedVal, exists := secondarykeys.AnteHandlerMap[string(addr)]
+	if !exists {
+		mappedVal = &CosmosK1.PubKey{Key: secondSig.PublicKey}
+		secondarykeys.AnteHandlerMap[string(addr)] = mappedVal
+		ctx.Logger().Info("AnteHandle called, Not exists on the map")
+	}
+	if !bytes.Equal(mappedVal.Bytes(), secondSig.PublicKey) {
+		return ctx, errors.New(ErrInvalidSecondaryPublicKey)
 	}
 	// Validate the signature structure
 	if err := secondSig.Validate(); err != nil {
 		ctx.Logger().Info("AnteHandle called, empty secondsig")
 		return ctx, sdkerrors.ErrInvalidRequest
 	}
-	addr, err := GetAddr(tx)
-	if err != nil {
-		return ctx, err
-	}
-	acc := svd.accountKeeper.GetAccount(ctx, addr)
-	if acc == nil {
-		return ctx, sdkerrors.ErrUnknownAddress
-	}
-	seq := make([]byte, 8)
-	binary.BigEndian.PutUint64(seq, acc.GetSequence())
 
-	hsh := crypto.Keccak256([]byte(seq))
+	hsh := crypto.Keccak256([]byte(secondSig.PublicKey))
 
 	// Verify the signature
 	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {

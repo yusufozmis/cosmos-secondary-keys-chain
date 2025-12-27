@@ -45,6 +45,8 @@ var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator address --
 
 var AnteHandlerPrefix string = "SECONDARY"
 
+var AnteHandlerMap = make(map[string]cryptotypes.PubKey) // User Address --> User Secondary Public Key
+
 func NewAppModule(
 	cdc codec.Codec,
 	keeper keeper.Keeper,
