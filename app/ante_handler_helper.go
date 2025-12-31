@@ -73,15 +73,19 @@ func GetAddr(tx sdk.Tx) ([]byte, error) {
 		return nil, sdkerrors.ErrTxDecode
 	}
 
-	signers, err := sigTx.GetSigners()
+	signers, err := sigTx.GetSignaturesV2()
 	if err != nil {
+		log.Println(err)
 		return nil, sdkerrors.ErrPanic
 	}
 	if len(signers) == 0 {
 		return nil, sdkerrors.ErrNoSignatures
 	}
-
-	return signers[0], nil
+	pubKey := signers[0].PubKey
+	if pubKey == nil {
+		return nil, sdkerrors.ErrInvalidPubKey.Wrap("signature has no public key")
+	}
+	return signers[0].PubKey.Bytes(), nil
 
 }
 
