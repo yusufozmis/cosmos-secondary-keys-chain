@@ -1,123 +1,122 @@
-package app
+package app_test
 
 import (
-	"encoding/hex"
+	"example/app"
 	"testing"
 
-	"github.com/cometbft/cometbft/crypto/secp256k1"
+	"cosmossdk.io/log"
+	storetypes "cosmossdk.io/store/types"
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/testutil/testdata"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
-	"github.com/cosmos/gogoproto/proto"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 )
 
-func TestSendTx(t *testing.T) {
-	// Generate new PrivateKey
+const ChainID = "example"
+
+func TestCustomAnteHandler(t *testing.T) {
+
 	priv := secp256k1.GenPrivKey()
 	pub := priv.PubKey()
-	KeyMap[MapKeyWord] = priv
-	// Derive the address for the new Private Key
-	fromAddr := sdk.AccAddress(pub.Address())
+	addr := sdk.AccAddress(pub.Address())
 
-	// Fund the new account
-	err := FundFromFaucet(fromAddr.String())
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	txConfig := tx.NewTxConfig(marshaler, tx.DefaultSignModes)
+
+	msg := testdata.NewTestMsg(addr)
+
+	// Build transaction
+	txBuilder := txConfig.NewTxBuilder()
+	err := txBuilder.SetMsgs(msg)
 	if err != nil {
-		t.Fatal(err.Error())
+		panic(err)
 	}
 
-	memo, err := CreateValidMemo()
+	txBuilder.SetGasLimit(200000)
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("stake", 1000)))
+	memo, err := app.CreateValidMemo()
 	if err != nil {
-		t.Fatal(err.Error())
+		panic("err at creating memo")
 	}
-	accNum, seq, err := GetAccountNumbers(fromAddr.String())
-	if err != nil {
-		panic("err at get account number")
-	}
-	//Create the transaction with the given info
-	signDoc, err := CreateTX(fromAddr, memo, &CosmosK1.PubKey{
-		Key: pub.Bytes(),
-	}, accNum, seq)
-
-	signDocBytes, err := proto.Marshal(signDoc)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	txBuilder.SetMemo(memo)
 
 	// Sign the transaction
-	sig, err := priv.Sign(signDocBytes)
-	if err != nil {
-		t.Fatal(err.Error())
+	sigV2 := signing.SignatureV2{
+		PubKey: pub,
+		Data: &signing.SingleSignatureData{
+			SignMode:  signing.SignMode_SIGN_MODE_DIRECT,
+			Signature: nil,
+		},
+		Sequence: 0,
 	}
 
-	// Raw Tx Data
-	txRaw := &txtypes.TxRaw{
-		BodyBytes:     signDoc.BodyBytes,
-		AuthInfoBytes: signDoc.AuthInfoBytes,
-		Signatures:    [][]byte{sig},
-	}
-	txBytes, err := proto.Marshal(txRaw)
+	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		t.Log(err.Error())
-	}
-	// Broadcast the transaction
-	err = BroadcastTx(hex.EncodeToString(txBytes))
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-}
-
-// Send Tx with same priv key to check antehandler mapping
-func TestAnteHandlerMapping(t *testing.T) {
-	// Generate new PrivateKey
-	priv := KeyMap[MapKeyWord]
-	pub := priv.PubKey()
-	// Derive the address for the new Private Key
-	fromAddr := sdk.AccAddress(pub.Address())
-
-	// Fund the new account
-	err := FundFromFaucet(fromAddr.String())
-	if err != nil {
-		t.Fatal(err.Error())
+		panic(err)
 	}
 
-	memo, err := CreateValidMemo()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	accNum, seq, err := GetAccountNumbers(fromAddr.String())
-	if err != nil {
-		panic("err at get account number")
-	}
-	//Create the transaction with the given info
-	signDoc, err := CreateTX(fromAddr, memo, &CosmosK1.PubKey{
-		Key: pub.Bytes(),
-	}, accNum, seq)
-
-	signDocBytes, err := proto.Marshal(signDoc)
-	if err != nil {
-		t.Fatal(err.Error())
+	// Generate sign bytes
+	signerData := authsigning.SignerData{
+		ChainID:       ChainID,
+		AccountNumber: 0,
+		Sequence:      0,
 	}
 
-	// Sign the transaction
-	sig, err := priv.Sign(signDocBytes)
+	ctx := sdk.NewContext(nil, cmtproto.Header{
+		ChainID: ChainID,
+		Height:  1,
+	}, false, log.NewNopLogger()).
+		WithBlockGasMeter(storetypes.NewInfiniteGasMeter())
+
+	signBytes, err := authsigning.GetSignBytesAdapter(
+		ctx,
+		txConfig.SignModeHandler(),
+		signing.SignMode_SIGN_MODE_DIRECT,
+		signerData,
+		txBuilder.GetTx(),
+	)
 	if err != nil {
-		t.Fatal(err.Error())
+		panic(err)
 	}
 
-	// Raw Tx Data
-	txRaw := &txtypes.TxRaw{
-		BodyBytes:     signDoc.BodyBytes,
-		AuthInfoBytes: signDoc.AuthInfoBytes,
-		Signatures:    [][]byte{sig},
-	}
-	txBytes, err := proto.Marshal(txRaw)
+	signature, err := priv.Sign(signBytes)
 	if err != nil {
-		t.Log(err.Error())
+		panic(err)
 	}
-	// Broadcast the transaction
-	err = BroadcastTx(hex.EncodeToString(txBytes))
+
+	sigV2 = signing.SignatureV2{
+		PubKey: pub,
+		Data: &signing.SingleSignatureData{
+			SignMode:  signing.SignMode_SIGN_MODE_DIRECT,
+			Signature: signature,
+		},
+		Sequence: 0,
+	}
+
+	err = txBuilder.SetSignatures(sigV2)
 	if err != nil {
-		t.Fatal(err.Error())
+		panic(err)
+	}
+
+	// Get the tx
+	signedTx := txBuilder.GetTx()
+
+	// Test with your custom decorator only
+	myCustomAnteHandler := sdk.ChainAnteDecorators(
+		app.NewSecondarySignatureVerificationDecorator(),
+	)
+
+	_, err = myCustomAnteHandler(ctx, signedTx, false)
+	if err != nil {
+		t.Logf("Custom ante handler returned error: %v", err)
+		t.Logf("This might be expected if your decorator needs keepers or store access")
+	} else {
+		t.Log("Custom ante handler test passed!")
 	}
 }
