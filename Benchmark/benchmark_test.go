@@ -26,11 +26,11 @@ func TestBenchmark(t *testing.T) {
 		// Derive the address for the new Private Key
 		fromAddr := sdk.AccAddress(pub.Address())
 		// Fund the new account
-		err := app.FundFromFaucet(fromAddr.String())
+		err := FundFromFaucet(fromAddr.String())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		accNum, seq, err := app.GetAccountNumbers(fromAddr.String())
+		accNum, seq, err := GetAccountNumbers(fromAddr.String())
 		if err != nil {
 			panic("err at get account number")
 		}
@@ -51,7 +51,7 @@ func TestBenchmark(t *testing.T) {
 	for i := 0; i < NumberOfAccounts; i++ {
 		for j := 0; j < NumberOfTransactionsPerAccount; j++ {
 			//Create the transactsion with the given info
-			signDoc, err := app.CreateTX(keys[i].Address, memo, &CosmosK1.PubKey{
+			signDoc, err := CreateTX(keys[i].Address, memo, &CosmosK1.PubKey{
 				Key: keys[i].PubKey.Bytes(),
 			}, keys[i].AccNum, keys[i].Sequence+uint64(j))
 
@@ -88,7 +88,7 @@ func TestBenchmark(t *testing.T) {
 			defer wg.Done()
 
 			for j := 0; j < NumberOfTransactionsPerAccount; j++ {
-				err := app.BroadcastTx(txHexs[i][j])
+				err := BroadcastTx(txHexs[i][j])
 				if err != nil {
 					continue
 				}
