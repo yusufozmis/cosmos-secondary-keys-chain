@@ -2,8 +2,11 @@ package benchmark
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"example/common"
+	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -75,8 +78,8 @@ func TestBenchmark(t *testing.T) {
 		}
 	}
 	log.Printf("broadcast started")
+	startBlockHeight, startTime, _ := GetLatestBlockInfo()
 	var wg sync.WaitGroup
-	s := time.Now()
 	for i := 0; i < common.NumberOfAccounts; i++ {
 		wg.Add(1)
 
@@ -92,8 +95,70 @@ func TestBenchmark(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	seconds := time.Since(s).Seconds()
-	numberOfTransactions := common.NumberOfAccounts * common.NumberOfTransactionsPerAccount
+	endBlockHeight, endTime, _ := GetLatestBlockInfo()
 
-	log.Println("TPS:", float64(numberOfTransactions)/seconds)
+	numberOfTxs, err := CountTxsInHeightRange(startBlockHeight, endBlockHeight)
+	if err != nil {
+		panic(err)
+	}
+	seconds := endTime.Sub(startTime)
+	log.Println("TPS:", numberOfTxs/int(seconds.Seconds()))
+}
+
+var rpcURL = "http://localhost:26657"
+
+type Status struct {
+	Result struct {
+		SyncInfo struct {
+			LatestBlockHeight int64     `json:"latest_block_height,string"`
+			LatestBlockTime   time.Time `json:"latest_block_time"`
+		} `json:"sync_info"`
+	} `json:"result"`
+}
+
+func GetLatestBlockInfo() (height int64, t time.Time, err error) {
+	resp, err := http.Get(rpcURL + "/status")
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	defer resp.Body.Close()
+
+	var s Status
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	return s.Result.SyncInfo.LatestBlockHeight,
+		s.Result.SyncInfo.LatestBlockTime,
+		nil
+}
+func CountTxsInHeightRange(startHeight, endHeight int64) (int, error) {
+	totalTxs := 0
+
+	for height := startHeight; height <= endHeight; height++ {
+		// Query block at specific height
+		resp, err := http.Get(fmt.Sprintf("http://localhost:26657/block?height=%d", height))
+		if err != nil {
+			return 0, err
+		}
+		defer resp.Body.Close()
+
+		var result struct {
+			Result struct {
+				Block struct {
+					Data struct {
+						Txs []string `json:"txs"`
+					} `json:"data"`
+				} `json:"block"`
+			} `json:"result"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return 0, err
+		}
+
+		totalTxs += len(result.Result.Block.Data.Txs)
+	}
+
+	return totalTxs, nil
 }
