@@ -62,7 +62,7 @@ func CreateValidMemo() (string, error) {
 
 	signature, err := EthereumK1.Sign(hsh, secondaryPrivKey)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	// Remove the recovery byte of the signature
 	sigNoV := signature[:64]
@@ -84,8 +84,8 @@ func CreateValidMemo() (string, error) {
 	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
 		return "", err
 	}
-
-	return string(memoBytes), nil
+	memo := "SECONDARY" + string(memoBytes)
+	return memo, nil
 }
 
 func (s *SecondarySignature) Validate() error {
@@ -234,7 +234,7 @@ func CreateTX(fromAddr sdk.AccAddress, memo string, sdkPub *CosmosK1.PubKey, acc
 
 	msgAny, err := codectypes.NewAnyWithValue(msg)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// Create Transaction's body

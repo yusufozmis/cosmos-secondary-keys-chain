@@ -17,16 +17,19 @@ func SimulateMsgBroadcastData(
 	bk types.BankKeeper,
 	k keeper.Keeper,
 	txGen client.TxConfig,
+	memo string,
 ) simtypes.Operation {
+	newMsgServer := keeper.NewMsgServerImpl(k)
 	return func(r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
-		simAccount, _ := simtypes.RandomAcc(r, accs)
 		msg := &types.MsgBroadcastData{
-			Sender: simAccount.Address.String(),
+			Sender: accs[0].Address.String(),
+			Data:   memo,
 		}
-
-		// TODO: Handle the BroadcastData simulation
-
+		_, err := newMsgServer.BroadcastData(ctx, msg)
+		if err != nil {
+			panic("err at broadcast data inside simulate")
+		}
 		return simtypes.NoOpMsg(types.ModuleName, sdk.MsgTypeURL(msg), "BroadcastData simulation not implemented"), nil, nil
 	}
 }

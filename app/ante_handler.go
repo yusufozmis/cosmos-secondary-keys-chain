@@ -72,14 +72,7 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	simulate bool,
 	next sdk.AnteHandler,
 ) (sdk.Context, error) {
-	// Skip verification in simulation mode
-	if simulate {
-		return next(ctx, tx, simulate)
-	}
-	// Skip verification during genesis (chain height 0)
-	if ctx.BlockHeight() == 0 {
-		return next(ctx, tx, simulate)
-	}
+
 	// Get the memo from the tx
 	memoTx, ok := tx.(sdk.TxWithMemo)
 	if !ok {
@@ -87,11 +80,6 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	}
 	memo := memoTx.GetMemo()
 
-	// If memo is empty, skip
-	if memo == "" {
-		ctx.Logger().Info("AnteHandle called,empty memo")
-		return next(ctx, tx, simulate)
-	}
 	var foundPrefix bool
 	memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
 
@@ -108,7 +96,7 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	}
 	addr, err := common.GetAddr(tx)
 	if err != nil {
-		panic("get addr err")
+		return ctx, sdkerrors.ErrLogic
 	}
 	exists, err := svd.k.AnteHandlerMap.Has(ctx, addr)
 	if err != nil {
@@ -117,9 +105,8 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	if !exists {
 		return ctx, sdkerrors.ErrNotFound
 	}
-
 	mappedVal, err := svd.k.GetSecondaryPubKeyAnteHandler(ctx, addr)
-	if err != nil && err != sdkerrors.ErrNotFound {
+	if err != nil {
 		return ctx, err
 	}
 	if !bytes.Equal(mappedVal, secondSig.PublicKey) {
