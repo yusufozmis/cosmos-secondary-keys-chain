@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"example/app"
+	"example/common"
 	"testing"
 
 	"cosmossdk.io/log"
@@ -40,7 +41,7 @@ func TestCustomAnteHandler(t *testing.T) {
 
 	txBuilder.SetGasLimit(200000)
 	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewInt64Coin("stake", 1000)))
-	memo, err := app.CreateValidMemo()
+	memo, err := common.CreateValidMemo()
 	if err != nil {
 		panic("err at creating memo")
 	}

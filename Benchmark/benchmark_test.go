@@ -2,7 +2,7 @@ package benchmark
 
 import (
 	"encoding/hex"
-	"example/app"
+	"example/common"
 	"log"
 	"sync"
 	"testing"
@@ -17,24 +17,24 @@ import (
 
 func TestBenchmark(t *testing.T) {
 
-	var keys []Account
+	var keys []common.Account
 
-	for i := 0; i < NumberOfAccounts; i++ {
+	for i := 0; i < common.NumberOfAccounts; i++ {
 		// Generate new PrivateKeys
 		priv := secp256k1.GenPrivKey()
 		pub := priv.PubKey()
 		// Derive the address for the new Private Key
 		fromAddr := sdk.AccAddress(pub.Address())
 		// Fund the new account
-		err := FundFromFaucet(fromAddr.String())
+		err := common.FundFromFaucet(fromAddr.String())
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		accNum, seq, err := GetAccountNumbers(fromAddr.String())
+		accNum, seq, err := common.GetAccountNumbers(fromAddr.String())
 		if err != nil {
 			panic("err at get account number")
 		}
-		keys = append(keys, Account{
+		keys = append(keys, common.Account{
 			PrivKey:  priv,
 			PubKey:   pub.Bytes(),
 			Address:  fromAddr,
@@ -42,16 +42,16 @@ func TestBenchmark(t *testing.T) {
 			Sequence: seq,
 		})
 	}
-	memo, err := app.CreateValidMemo()
+	memo, err := common.CreateValidMemo()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	log.Printf("tx creation started")
-	txHexs := make([][]string, NumberOfAccounts)
-	for i := 0; i < NumberOfAccounts; i++ {
-		for j := 0; j < NumberOfTransactionsPerAccount; j++ {
+	txHexs := make([][]string, common.NumberOfAccounts)
+	for i := 0; i < common.NumberOfAccounts; i++ {
+		for j := 0; j < common.NumberOfTransactionsPerAccount; j++ {
 			//Create the transactsion with the given info
-			signDoc, err := CreateTX(keys[i].Address, memo, &CosmosK1.PubKey{
+			signDoc, err := common.CreateTX(keys[i].Address, memo, &CosmosK1.PubKey{
 				Key: keys[i].PubKey.Bytes(),
 			}, keys[i].AccNum, keys[i].Sequence+uint64(j))
 
@@ -81,14 +81,14 @@ func TestBenchmark(t *testing.T) {
 	log.Printf("broadcast started")
 	var wg sync.WaitGroup
 	s := time.Now()
-	for i := 0; i < NumberOfAccounts; i++ {
+	for i := 0; i < common.NumberOfAccounts; i++ {
 		wg.Add(1)
 
 		go func(i int) {
 			defer wg.Done()
 
-			for j := 0; j < NumberOfTransactionsPerAccount; j++ {
-				err := BroadcastTx(txHexs[i][j])
+			for j := 0; j < common.NumberOfTransactionsPerAccount; j++ {
+				err := common.BroadcastTx(txHexs[i][j])
 				if err != nil {
 					continue
 				}
@@ -97,7 +97,7 @@ func TestBenchmark(t *testing.T) {
 	}
 	wg.Wait()
 	seconds := time.Since(s).Seconds()
-	numberOfTransactions := NumberOfAccounts * NumberOfTransactionsPerAccount
+	numberOfTransactions := common.NumberOfAccounts * common.NumberOfTransactionsPerAccount
 
 	log.Println("TPS:", float64(numberOfTransactions)/seconds)
 }

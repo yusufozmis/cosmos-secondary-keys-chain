@@ -1,62 +1,139 @@
-package benchmark
+package common
 
 import (
-	"encoding/json"
-	"fmt"
-
-	"time"
-
 	"bytes"
+	"encoding/json"
+	secondarykeys "example/x/secondarykeys/module"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/cometbft/cometbft/crypto/secp256k1"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/gogoproto/proto"
+	"github.com/ethereum/go-ethereum/crypto"
+	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
 )
 
-const NumberOfAccounts int = 10 // Funding each account is around 2 seconds.
-// Hence, numberofaccounts should not be too big
-const NumberOfTransactionsPerAccount int = 10000
+func GetAddr(tx sdk.Tx) ([]byte, error) {
 
-type Account struct {
-	PrivKey  secp256k1.PrivKey
-	PubKey   secp256k1.PubKey
-	Address  sdk.AccAddress
-	AccNum   uint64
-	Sequence uint64
+	sigTx, ok := tx.(authsigning.SigVerifiableTx)
+	if !ok {
+		return nil, sdkerrors.ErrTxDecode
+	}
+	signers, err := sigTx.GetSignaturesV2()
+	if err != nil {
+		log.Println(err)
+		return nil, sdkerrors.ErrPanic
+	}
+	if len(signers) == 0 {
+		return nil, sdkerrors.ErrNoSignatures
+	}
+
+	pubKey := signers[0].PubKey
+	if pubKey == nil {
+		return nil, sdkerrors.ErrInvalidPubKey.Wrap("signature has no public key")
+	}
+	return signers[0].PubKey.Address(), nil
+
 }
 
-const chainID string = "example"
-const rpcURL string = "http://localhost:26657"
-const toAddrStr string = "cosmos1yguqe63ekq7e3vnkmpc3gr0n9h43zf53cemrrt"
-const sendAmount int64 = 1
-const txFee int64 = 0
-const faucetRequestAmount string = "100000stake"
+func CreateValidMemo() (string, error) {
+	// Generate a random Ethereum private key
+	secondaryPrivKey, err := EthereumK1.GenerateKey()
+	if err != nil {
+		return "", err
+	}
 
-type FaucetReq struct {
-	Address string   `json:"address"`
-	Coins   []string `json:"coins"`
+	// Get the public key (uncompressed format, 65 bytes)
+	secondaryPubKey := crypto.FromECDSAPub(&secondaryPrivKey.PublicKey)
+
+	// Sign the predefined messagea
+	messageToSign := []byte(secondaryPubKey)
+	hsh := crypto.Keccak256(messageToSign)
+
+	signature, err := EthereumK1.Sign(hsh, secondaryPrivKey)
+	if err != nil {
+		panic(err)
+	}
+	// Remove the recovery byte of the signature
+	sigNoV := signature[:64]
+
+	// Create the secondary signature struct
+	secondSig := SecondarySignature{
+		PublicKey: secondaryPubKey,
+		Signature: sigNoV,
+	}
+
+	// Encode it into memo format
+	memoBytes, err := EncodeMemoWithSecondSig(secondSig)
+	if err != nil {
+		return "", err
+	}
+	log.Println("memo string", string(memoBytes))
+
+	// Verify the signature
+	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
+		return "", err
+	}
+
+	memo := secondarykeys.AnteHandlerPrefix + string(memoBytes)
+
+	return memo, nil
 }
 
-type AccountResp struct {
-	Account json.RawMessage `json:"account"`
+func (s *SecondarySignature) Validate() error {
+	if len(s.PublicKey) == 0 {
+		return fmt.Errorf("missing public key")
+	}
+	if len(s.Signature) == 0 {
+		return fmt.Errorf("missing signature")
+	}
+	return nil
 }
 
-type BaseAccount struct {
-	AccountNumber string `json:"account_number"`
-	Sequence      string `json:"sequence"`
+// EncodeMemoWithSecondSig - just encode the signature
+func EncodeMemoWithSecondSig(secondSig SecondarySignature) ([]byte, error) {
+
+	memoBytes, err := json.Marshal(secondSig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal memo: %w", err)
+	}
+
+	return memoBytes, nil
 }
 
-type VestingAccount struct {
-	BaseAccount BaseAccount `json:"base_account"`
+// DecodeSecondSigFromMemo - extract the signature and remove recovery byte from signature
+func DecodeSecondSigFromMemo(memo []byte) (*SecondarySignature, error) {
+	if memo == nil {
+		return nil, fmt.Errorf("empty memo")
+	}
+
+	var memoData SecondarySignature
+	if err := json.Unmarshal(memo, &memoData); err != nil {
+		return nil, fmt.Errorf("invalid memo format: %w", err)
+	}
+
+	sig := memoData.Signature
+
+	// remove the recovery byte from the signature
+	if len(sig) == 65 {
+		sig = sig[:64]
+	}
+
+	return &SecondarySignature{
+		PublicKey: memoData.PublicKey,
+		Signature: sig,
+	}, nil
 }
 
 // Requests funds from faucet

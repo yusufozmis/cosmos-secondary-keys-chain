@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 
+	"example/common"
 	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
 	"strings"
@@ -96,12 +97,12 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		return next(ctx, tx, simulate)
 	}
 	// Decode the secondarySignature and publicKey from memo
-	secondSig, err := DecodeSecondSigFromMemo([]byte(memo))
+	secondSig, err := common.DecodeSecondSigFromMemo([]byte(memo))
 	if err != nil {
 		ctx.Logger().Info("AnteHandle called,decode err", memo)
 		return ctx, sdkerrors.ErrInvalidRequest
 	}
-	addr, err := GetAddr(tx)
+	addr, err := common.GetAddr(tx)
 	if err != nil {
 		panic("get addr err")
 	}
@@ -112,7 +113,7 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 		ctx.Logger().Info("AnteHandle called, Not exists on the map")
 	}
 	if !bytes.Equal(mappedVal.Bytes(), secondSig.PublicKey) {
-		return ctx, errors.New(ErrInvalidSecondaryPublicKey)
+		return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
 	}
 	// Validate the signature structure
 	if err := secondSig.Validate(); err != nil {
