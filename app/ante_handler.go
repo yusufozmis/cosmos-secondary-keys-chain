@@ -5,11 +5,11 @@ import (
 	"errors"
 
 	"example/common"
+	"example/x/secondarykeys/keeper"
 	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
 	"strings"
 
-	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
@@ -22,14 +22,18 @@ type HandlerOptions struct {
 }
 
 // SecondarySignatureVerificationDecorator verifies the secondary signature in the memo
-type SecondarySignatureVerificationDecorator struct{}
-
-// NewSecondarySignatureVerificationDecorator creates a new decorator instance
-func NewSecondarySignatureVerificationDecorator() SecondarySignatureVerificationDecorator {
-	return SecondarySignatureVerificationDecorator{}
+type SecondarySignatureVerificationDecorator struct {
+	k keeper.Keeper
 }
 
-func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
+// NewSecondarySignatureVerificationDecorator creates a new decorator instance
+func NewSecondarySignatureVerificationDecorator(k keeper.Keeper) SecondarySignatureVerificationDecorator {
+	return SecondarySignatureVerificationDecorator{
+		k: k,
+	}
+}
+
+func NewAnteHandler(options ante.HandlerOptions, secondaryKeeper keeper.Keeper) (sdk.AnteHandler, error) {
 
 	if options.AccountKeeper == nil {
 		return nil, errors.New("account keeper is required for ante builder")
@@ -54,7 +58,7 @@ func NewAnteHandler(options ante.HandlerOptions) (sdk.AnteHandler, error) {
 		ante.NewSigGasConsumeDecorator(options.AccountKeeper, options.SigGasConsumer),
 		ante.NewSigVerificationDecorator(options.AccountKeeper, options.SignModeHandler),
 
-		NewSecondarySignatureVerificationDecorator(),
+		NewSecondarySignatureVerificationDecorator(secondaryKeeper),
 		ante.NewIncrementSequenceDecorator(options.AccountKeeper),
 	}
 
@@ -106,13 +110,19 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	if err != nil {
 		panic("get addr err")
 	}
-	mappedVal, exists := secondarykeys.AnteHandlerMap[string(addr)]
-	if !exists {
-		mappedVal = &CosmosK1.PubKey{Key: secondSig.PublicKey}
-		secondarykeys.AnteHandlerMap[string(addr)] = mappedVal
-		ctx.Logger().Info("AnteHandle called, Not exists on the map")
+	exists, err := svd.k.AnteHandlerMap.Has(ctx, addr)
+	if err != nil {
+		return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
 	}
-	if !bytes.Equal(mappedVal.Bytes(), secondSig.PublicKey) {
+	if !exists {
+		return ctx, sdkerrors.ErrNotFound
+	}
+
+	mappedVal, err := svd.k.GetSecondaryPubKeyAnteHandler(ctx, addr)
+	if err != nil && err != sdkerrors.ErrNotFound {
+		return ctx, err
+	}
+	if !bytes.Equal(mappedVal, secondSig.PublicKey) {
 		return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
 	}
 	// Validate the signature structure

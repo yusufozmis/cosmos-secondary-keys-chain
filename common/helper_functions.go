@@ -3,7 +3,6 @@ package common
 import (
 	"bytes"
 	"encoding/json"
-	secondarykeys "example/x/secondarykeys/module"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -86,9 +85,7 @@ func CreateValidMemo() (string, error) {
 		return "", err
 	}
 
-	memo := secondarykeys.AnteHandlerPrefix + string(memoBytes)
-
-	return memo, nil
+	return string(memoBytes), nil
 }
 
 func (s *SecondarySignature) Validate() error {

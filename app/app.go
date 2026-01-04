@@ -3,6 +3,11 @@ package app
 import (
 	"io"
 
+	"example/docs"
+	examplemodulekeeper "example/x/example/keeper"
+	voteextension "example/x/secondarykeys/VoteExtension"
+	secondarykeysmodulekeeper "example/x/secondarykeys/keeper"
+
 	clienthelpers "cosmossdk.io/client/v2/helpers"
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/depinject"
@@ -44,11 +49,6 @@ import (
 	icahostkeeper "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host/keeper"
 	ibctransferkeeper "github.com/cosmos/ibc-go/v10/modules/apps/transfer/keeper"
 	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
-
-	"example/docs"
-	examplemodulekeeper "example/x/example/keeper"
-	voteextension "example/x/secondarykeys/VoteExtension"
-	secondarykeysmodulekeeper "example/x/secondarykeys/keeper"
 )
 
 const (
@@ -236,6 +236,7 @@ func New(
 			SignModeHandler: app.txConfig.SignModeHandler(),
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
+		app.SecondarykeysKeeper,
 	)
 	if err != nil {
 		panic(err)
