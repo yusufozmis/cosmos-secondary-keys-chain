@@ -42,16 +42,12 @@ func TestBenchmark(t *testing.T) {
 			Sequence: seq,
 		})
 	}
-	memo, err := common.CreateValidMemo()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 	log.Printf("tx creation started")
 	txHexs := make([][]string, common.NumberOfAccounts)
 	for i := 0; i < common.NumberOfAccounts; i++ {
 		for j := 0; j < common.NumberOfTransactionsPerAccount; j++ {
 			//Create the transactsion with the given info
-			signDoc, err := common.CreateTX(keys[i].Address, memo, &CosmosK1.PubKey{
+			signDoc, err := common.CreateTX(keys[i].Address, "", &CosmosK1.PubKey{
 				Key: keys[i].PubKey.Bytes(),
 			}, keys[i].AccNum, keys[i].Sequence+uint64(j))
 

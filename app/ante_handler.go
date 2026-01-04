@@ -73,59 +73,60 @@ func (svd SecondarySignatureVerificationDecorator) AnteHandle(
 	next sdk.AnteHandler,
 ) (sdk.Context, error) {
 
-	// Get the memo from the tx
 	memoTx, ok := tx.(sdk.TxWithMemo)
 	if !ok {
 		return ctx, sdkerrors.ErrTxDecode
 	}
 	memo := memoTx.GetMemo()
 
-	var foundPrefix bool
-	memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
+	if memo != "" {
 
-	// Check if the memo has the prefix.
-	if !foundPrefix {
-		ctx.Logger().Info("AnteHandle called,no prefix")
-		return next(ctx, tx, simulate)
-	}
-	// Decode the secondarySignature and publicKey from memo
-	secondSig, err := common.DecodeSecondSigFromMemo([]byte(memo))
-	if err != nil {
-		ctx.Logger().Info("AnteHandle called,decode err", memo)
-		return ctx, sdkerrors.ErrInvalidRequest
-	}
-	addr, err := common.GetAddr(tx)
-	if err != nil {
-		return ctx, sdkerrors.ErrLogic
-	}
-	exists, err := svd.k.AnteHandlerMap.Has(ctx, addr)
-	if err != nil {
-		return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
-	}
-	if !exists {
-		return ctx, sdkerrors.ErrNotFound
-	}
-	mappedVal, err := svd.k.GetSecondaryPubKeyAnteHandler(ctx, addr)
-	if err != nil {
-		return ctx, err
-	}
-	if !bytes.Equal(mappedVal, secondSig.PublicKey) {
-		return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
-	}
-	// Validate the signature structure
-	if err := secondSig.Validate(); err != nil {
-		ctx.Logger().Info("AnteHandle called, empty secondsig")
-		return ctx, sdkerrors.ErrInvalidRequest
-	}
+		var foundPrefix bool
+		memo, foundPrefix = strings.CutPrefix(memo, secondarykeys.AnteHandlerPrefix)
 
-	hsh := crypto.Keccak256([]byte(secondSig.PublicKey))
+		// Check if the memo has the prefix.
+		if !foundPrefix {
+			ctx.Logger().Info("AnteHandle called,no prefix")
+			return next(ctx, tx, simulate)
+		}
+		// Decode the secondarySignature and publicKey from memo
+		secondSig, err := common.DecodeSecondSigFromMemo([]byte(memo))
+		if err != nil {
+			ctx.Logger().Info("AnteHandle called,decode err", memo)
+			return ctx, sdkerrors.ErrInvalidRequest
+		}
+		addr, err := common.GetAddr(tx)
+		if err != nil {
+			return ctx, sdkerrors.ErrLogic
+		}
+		exists, err := svd.k.AnteHandlerMap.Has(ctx, addr)
+		if err != nil {
+			return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
+		}
+		if !exists {
+			return ctx, sdkerrors.ErrNotFound
+		}
+		mappedVal, err := svd.k.GetSecondaryPubKeyAnteHandler(ctx, addr)
+		if err != nil {
+			return ctx, err
+		}
+		if !bytes.Equal(mappedVal, secondSig.PublicKey) {
+			return ctx, errors.New(common.ErrInvalidSecondaryPublicKey)
+		}
+		// Validate the signature structure
+		if err := secondSig.Validate(); err != nil {
+			ctx.Logger().Info("AnteHandle called, empty secondsig")
+			return ctx, sdkerrors.ErrInvalidRequest
+		}
 
-	// Verify the signature
-	if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
-		ctx.Logger().Info("AnteHandle called,invalid signature")
-		return ctx, fmt.Errorf("signature verification failed")
+		hsh := crypto.Keccak256([]byte(secondSig.PublicKey))
+
+		// Verify the signature
+		if !EthereumK1.VerifySignature(secondSig.PublicKey, hsh, secondSig.Signature) {
+			ctx.Logger().Info("AnteHandle called,invalid signature")
+			return ctx, fmt.Errorf("signature verification failed")
+		}
+		ctx.Logger().Info("AnteHandle called,tx valid")
 	}
-
-	ctx.Logger().Info("AnteHandle called,tx valid")
 	return next(ctx, tx, simulate)
 }
