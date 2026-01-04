@@ -13,7 +13,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
-	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
@@ -41,11 +40,7 @@ type AppModule struct {
 
 var SecondaryPrivateKey ecdsa.PrivateKey
 
-var SecondaryKeyMap = make(map[string]cryptotypes.PubKey) //validator address --> validator secondary pubKey
-
 var AnteHandlerPrefix string = "SECONDARY"
-
-var AnteHandlerMap = make(map[string]cryptotypes.PubKey) // User Address --> User Secondary Public Key
 
 func NewAppModule(
 	cdc codec.Codec,

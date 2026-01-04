@@ -20,9 +20,10 @@ type Keeper struct {
 	// Typically, this should be the x/gov module account.
 	authority []byte
 
-	Schema         collections.Schema
-	Params         collections.Item[types.Params]
-	AnteHandlerMap collections.Map[sdk.AccAddress, []byte]
+	Schema           collections.Schema
+	Params           collections.Item[types.Params]
+	AnteHandlerMap   collections.Map[sdk.AccAddress, []byte]
+	VoteExtensionMap collections.Map[sdk.AccAddress, []byte]
 }
 
 func NewKeeper(
@@ -52,6 +53,13 @@ func NewKeeper(
 			sdk.AccAddressKey,
 			collections.BytesValue,
 		),
+		VoteExtensionMap: collections.NewMap(
+			sb,
+			collections.NewPrefix(1), // or 1, 2, etc if you have multiple maps
+			"vote_extension_map",
+			sdk.AccAddressKey,
+			collections.BytesValue,
+		),
 	}
 
 	schema, err := sb.Build()
@@ -74,6 +82,18 @@ func (k Keeper) SetSecondaryPubKeyAnteHandler(ctx context.Context, addr sdk.AccA
 
 func (k Keeper) GetSecondaryPubKeyAnteHandler(ctx context.Context, addr sdk.AccAddress) ([]byte, error) {
 	bz, err := k.AnteHandlerMap.Get(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	return bz, err
+}
+
+func (k Keeper) SetSecondaryPubKeyVoteExtension(ctx context.Context, addr sdk.AccAddress, pubKey []byte) error {
+	return k.VoteExtensionMap.Set(ctx, addr, pubKey)
+}
+
+func (k Keeper) GetSecondaryPubKeyVoteExtension(ctx context.Context, addr sdk.AccAddress) ([]byte, error) {
+	bz, err := k.VoteExtensionMap.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

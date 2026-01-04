@@ -3,10 +3,7 @@ package voteextension
 import (
 	"encoding/json"
 	"errors"
-	"example/x/example/keeper"
-	secondarykeys "example/x/secondarykeys/module"
-
-	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"example/x/secondarykeys/keeper"
 
 	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -21,64 +18,45 @@ type ProposalHandler struct {
 	valStore baseapp.ValidatorStore
 }
 
+type ValidatorSignature struct {
+	ValidatorAddress []byte `json:"validator_address"`
+	Signature        []byte `json:"signature"`
+}
+
 type InjectedVoteExtTx struct {
-	Signatures [][]byte
+	ValidatorSignatures []ValidatorSignature `json:"validator_signatures"`
 }
 
 func (h *ProposalHandler) PrepareProposal() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
 
-		ctx.Logger().Info("PrepareProposal called",
-			"height", req.Height,
-			"num_votes", len(req.LocalLastCommit.Votes),
-		)
+		ctx.Logger().Info("PrepareProposal called")
 
-		var signatures [][]byte
+		var validatorSignatures []ValidatorSignature
 
 		for i, vote := range req.LocalLastCommit.Votes {
-			ctx.Logger().Info("Examining vote",
-				"index", i,
-				"vote_extension_length", len(vote.VoteExtension),
-				"signature_length", len(vote.ExtensionSignature),
-			)
-
 			if len(vote.VoteExtension) == 0 {
 				ctx.Logger().Info("Vote has no extension", "index", i)
 				continue
 			}
-
 			var voteExt SignatureVoteExtend
 			if err := json.Unmarshal(vote.VoteExtension, &voteExt); err != nil {
-				ctx.Logger().Error("Failed to unmarshal vote extension in prepare",
-					"error", err,
-					"index", i,
-					"raw_data", string(vote.VoteExtension),
-				)
+				ctx.Logger().Error("unmarshall err")
 				continue
 			}
-
-			signatures = append(signatures, voteExt.Signature)
-			ctx.Logger().Info("Successfully extracted signature",
-				"index", i,
-				"signature_length", len(voteExt.Signature),
-			)
+			validatorSignatures = append(validatorSignatures, ValidatorSignature{
+				ValidatorAddress: vote.Validator.Address,
+				Signature:        voteExt.Signature,
+			})
 		}
-
-		ctx.Logger().Info("PrepareProposalHandler collected signatures",
-			"count", len(signatures),
-			"total_votes", len(req.LocalLastCommit.Votes),
-			"height", req.Height,
-		)
-
-		if len(signatures) == 0 {
+		if len(validatorSignatures) == 0 {
 			ctx.Logger().Info("No vote extensions found, not injecting tx")
 			return &abci.ResponsePrepareProposal{
 				Txs: req.Txs,
 			}, nil
 		}
-
 		injectedTx := InjectedVoteExtTx{
-			Signatures: signatures,
+			ValidatorSignatures: validatorSignatures,
 		}
 		tx, err := json.Marshal(injectedTx)
 		if err != nil {
@@ -88,12 +66,6 @@ func (h *ProposalHandler) PrepareProposal() sdk.PrepareProposalHandler {
 		txs := make([][]byte, 0, len(req.Txs)+1)
 		txs = append(txs, tx)
 		txs = append(txs, req.Txs...)
-
-		ctx.Logger().Info("Injected signature tx",
-			"injected_tx_size", len(tx),
-			"total_txs", len(txs),
-		)
-
 		return &abci.ResponsePrepareProposal{
 			Txs: txs,
 		}, nil
@@ -103,11 +75,7 @@ func (h *ProposalHandler) PrepareProposal() sdk.PrepareProposalHandler {
 // ProcessProposal validates the proposal including the injected signature transaction
 func (h *ProposalHandler) ProcessProposal() sdk.ProcessProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
-		ctx.Logger().Info("ProcessProposal started",
-			"height", req.Height,
-			"num_txs", len(req.Txs),
-			"proposer", req.ProposerAddress,
-		)
+
 		if len(req.Txs) == 0 {
 			ctx.Logger().Info("Empty block proposal (no vote extensions from previous block), accepting")
 			return &abci.ResponseProcessProposal{
@@ -125,30 +93,44 @@ func (h *ProposalHandler) ProcessProposal() sdk.ProcessProposalHandler {
 				Status: abci.ResponseProcessProposal_REJECT,
 			}, nil
 		}
-		for _, signature := range injectedTx.Signatures {
-			publicKey, err := EthereumK1.RecoverPubkey(ctx.HeaderHash(), signature)
-			if err != nil {
-				panic("err at recover pubkey")
-			}
-			pubKey := CosmosK1.PubKey{
-				Key: publicKey,
-			}
-			secondarykeys.SecondaryKeyMap[string(req.ProposerAddress)] = &pubKey
-		}
 
-		// Verify that we have signatures in the injected tx
-		if len(injectedTx.Signatures) == 0 {
+		if len(injectedTx.ValidatorSignatures) == 0 {
 			ctx.Logger().Error("Signature tx has no signatures")
 			return &abci.ResponseProcessProposal{
 				Status: abci.ResponseProcessProposal_REJECT,
 			}, nil
 		}
-		ctx.Logger().Info("Signature transaction validated",
-			"height", req.Height,
-			"num_signatures", len(injectedTx.Signatures),
-			"total_txs", len(req.Txs),
-		)
 
+		blockHash := ctx.HeaderHash()
+
+		for _, valSig := range injectedTx.ValidatorSignatures {
+			publicKey, err := EthereumK1.RecoverPubkey(blockHash, valSig.Signature)
+			if err != nil {
+				ctx.Logger().Error("Failed to recover public key",
+					"error", err,
+					"validator", valSig.ValidatorAddress,
+				)
+				return &abci.ResponseProcessProposal{
+					Status: abci.ResponseProcessProposal_REJECT,
+				}, nil
+			}
+			exists, err := h.Keeper.VoteExtensionMap.Has(ctx, valSig.ValidatorAddress)
+			if err != nil {
+				ctx.Logger().Error("vote extension map err")
+				return &abci.ResponseProcessProposal{
+					Status: abci.ResponseProcessProposal_REJECT,
+				}, nil
+			}
+			if !exists {
+				if err := h.Keeper.VoteExtensionMap.Set(ctx, valSig.ValidatorAddress, publicKey); err != nil {
+					ctx.Logger().Error("vote extension map err")
+					return &abci.ResponseProcessProposal{
+						Status: abci.ResponseProcessProposal_REJECT,
+					}, nil
+				}
+			}
+		}
+		ctx.Logger().Info("vote extension valid")
 		return &abci.ResponseProcessProposal{
 			Status: abci.ResponseProcessProposal_ACCEPT,
 		}, nil

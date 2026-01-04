@@ -214,11 +214,11 @@ func New(
 
 	app.sm.RegisterStoreDecoders()
 
-	app.voteExtHandler = voteextension.NewVoteExtensionHandler(&app.ExampleKeeper)
+	app.voteExtHandler = voteextension.NewVoteExtensionHandler(&app.SecondarykeysKeeper)
 
 	app.proposalHandler = &voteextension.ProposalHandler{
 		Logger: logger,
-		Keeper: app.ExampleKeeper,
+		Keeper: app.SecondarykeysKeeper,
 	}
 	// Vote Extension handlers
 	app.SetExtendVoteHandler(app.voteExtHandler.ExtendVoteHandler())
