@@ -1,4 +1,5 @@
 syntax = "proto3";
+
 package example.secondarykeys.v1;
 
 import "amino/amino.proto";
@@ -16,6 +17,9 @@ service Msg {
   // UpdateParams defines a (governance) operation for updating the module
   // parameters. The authority defaults to the x/gov module account.
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // BroadcastData defines the BroadcastData RPC.
+  rpc BroadcastData(MsgBroadcastData) returns (MsgBroadcastDataResponse);
 }
 
 // MsgUpdateParams is the Msg/UpdateParams request type.
@@ -38,3 +42,13 @@ message MsgUpdateParams {
 // MsgUpdateParamsResponse defines the response structure for executing a
 // MsgUpdateParams message.
 message MsgUpdateParamsResponse {}
+
+// MsgBroadcastData defines the MsgBroadcastData message.
+message MsgBroadcastData {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string data = 2;
+}
+
+// MsgBroadcastDataResponse defines the MsgBroadcastDataResponse message.
+message MsgBroadcastDataResponse {}

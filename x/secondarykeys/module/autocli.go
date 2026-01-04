@@ -28,6 +28,12 @@ func (am AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 					RpcMethod: "UpdateParams",
 					Skip:      true, // skipped because authority gated
 				},
+				{
+					RpcMethod:      "BroadcastData",
+					Use:            "broadcast-data [data]",
+					Short:          "Send a broadcast-data tx",
+					PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "data"}},
+				},
 				// this line is used by ignite scaffolding # autocli/tx
 			},
 		},
