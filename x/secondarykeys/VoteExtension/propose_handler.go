@@ -9,7 +9,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	EthereumK1 "github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type ProposalHandler struct {
@@ -104,7 +104,8 @@ func (h *ProposalHandler) ProcessProposal() sdk.ProcessProposalHandler {
 		blockHash := ctx.HeaderHash()
 
 		for _, valSig := range injectedTx.ValidatorSignatures {
-			publicKey, err := EthereumK1.RecoverPubkey(blockHash, valSig.Signature)
+			pk, err := crypto.SigToPub(blockHash, valSig.Signature)
+			publicKey := crypto.FromECDSAPub(pk)
 			if err != nil {
 				ctx.Logger().Error("Failed to recover public key",
 					"error", err,

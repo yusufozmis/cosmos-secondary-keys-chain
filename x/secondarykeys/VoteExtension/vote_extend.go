@@ -7,7 +7,7 @@ import (
 
 	abci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	EthereumK1 "github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // VoteExtensionHandler handles vote extension creation and verification
@@ -31,7 +31,7 @@ func (h *VoteExtensionHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 		ctx.Logger().Info("EXTEND VOTE HANDLER CALLED",
 			"height", req.GetHeight(),
 		)
-		signature, err := EthereumK1.Sign(req.GetHash(), secondarykeys.SecondaryPrivateKey.D.Bytes())
+		signature, err := crypto.Sign(req.GetHash(), &secondarykeys.SecondaryPrivateKey)
 		if err != nil {
 			ctx.Logger().Error("Failed to sign", "error", err)
 			return nil, err
@@ -73,17 +73,17 @@ func (h *VoteExtensionHandler) VerifyVoteExtensionHandler() sdk.VerifyVoteExtens
 				Status: abci.ResponseVerifyVoteExtension_UNKNOWN,
 			}, nil
 		}
-		var pk []byte
+		var pubBytes []byte
 		if !exists {
-			pk, err = EthereumK1.RecoverPubkey(req.Hash, voteExtension.Signature)
+			pk, err := crypto.SigToPub(req.Hash, voteExtension.Signature)
 			if err != nil {
 				return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, nil
 			}
-			h.keeper.VoteExtensionMap.Set(ctx, req.ValidatorAddress, pk)
+			pubBytes := crypto.FromECDSAPub(pk)
+			h.keeper.VoteExtensionMap.Set(ctx, req.ValidatorAddress, pubBytes)
 		}
-		pk, err = h.keeper.VoteExtensionMap.Get(ctx, req.ValidatorAddress)
-
-		if !EthereumK1.VerifySignature(pk, req.Hash, voteExtension.Signature[:64]) {
+		pubBytes, err = h.keeper.VoteExtensionMap.Get(ctx, req.ValidatorAddress)
+		if !crypto.VerifySignature(pubBytes, req.Hash, voteExtension.Signature[:64]) {
 			ctx.Logger().Info("Signature NOT verified, calling from verifyvoteextension",
 				"height", req.Height,
 			)

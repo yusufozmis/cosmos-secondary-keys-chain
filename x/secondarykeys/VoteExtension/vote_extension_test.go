@@ -16,8 +16,8 @@ import (
 	CosmosK1 "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	EthereumK1 "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,11 +91,11 @@ func TestVoteExtension(t *testing.T) {
 		}
 		publicKey, exists := SecondaryKeyMap[string(req.ValidatorAddress)]
 		if !exists {
-			pk, err := secp256k1.RecoverPubkey(req.Hash, voteExtension.Signature)
+			pk, err := crypto.SigToPub(req.Hash, voteExtension.Signature)
 			if err != nil {
 				return &abci.ResponseVerifyVoteExtension{Status: abci.ResponseVerifyVoteExtension_REJECT}, nil
 			}
-			publicKey = &CosmosK1.PubKey{Key: pk}
+			publicKey := &CosmosK1.PubKey{Key: crypto.FromECDSAPub(pk)}
 			SecondaryKeyMap[string(req.ValidatorAddress)] = publicKey
 		}
 		if !EthereumK1.VerifySignature(publicKey.Bytes(), req.Hash, voteExtension.Signature[:64]) {
